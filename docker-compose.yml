@@ -1,0 +1,9 @@
+services:
+  redaction-service:
+    build: .
+    ports:
+      - "5005:5005"
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=development
