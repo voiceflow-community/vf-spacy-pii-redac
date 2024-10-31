@@ -61,20 +61,37 @@ AVAILABLE_MATCHERS = {
     },
     "ADDRESS": {
         "patterns": [
-            # Postal/ZIP codes (French and general format)
+            # Postal/ZIP codes
             [{"SHAPE": "ddddd"}],  # French postal code
-            [{"TEXT": {"REGEX": "\\b\\d{5}(-\\d{4})?\\b"}}, {"LOWER": {"IN": ["france", "usa"]}}],  # With country
-            # Street patterns
-            [{"LOWER": {"IN": ["rue", "avenue", "boulevard", "chemin", "impasse", "place", "route"]}},
-             {"OP": "?"}, {"OP": "?"}],  # French street types
-            [{"LOWER": {"IN": ["street", "avenue", "road", "lane", "drive", "way", "boulevard", "court"]}},
-             {"OP": "?"}, {"OP": "?"}],  # English street types
-            # Building/Apartment numbers
-            [{"SHAPE": "dd"}, {"LOWER": {"IN": ["rue", "avenue", "boulevard", "chemin", "street", "road"]}}],
-            [{"TEXT": {"REGEX": "\\b\\d+\\s*[a-zA-Z]?(\\s*-\\s*\\d+)?\\b"}},
-             {"LOWER": {"IN": ["rue", "avenue", "boulevard", "chemin", "street", "road"]}}]
+            [{"TEXT": {"REGEX": "\\b\\d{5}(-\\d{4})?\\b"}}],  # Generic postal code
+
+            # Street numbers with street types
+            [{"LIKE_NUM": True},
+             {"LOWER": {"IN": ["rue", "avenue", "boulevard", "chemin", "impasse", "place", "route", "allée", "cours"]}},
+             {"OP": "*"},  # Optional words in between
+             {"OP": "*"}],
+
+            # Street names (capturing the whole phrase)
+            [{"LOWER": {"IN": ["rue", "avenue", "boulevard", "chemin", "impasse", "place", "route", "allée", "cours"]}},
+             {"OP": "+"}, {"OP": "+"}, {"OP": "?"}],  # Multiple words following street type
+
+            # Cities with postal codes
+            [{"IS_ALPHA": True}, {"SHAPE": "ddddd"}],  # City name followed by postal code
+            [{"SHAPE": "ddddd"}, {"IS_ALPHA": True}],  # Postal code followed by city name
+
+            # Building/Apartment numbers with variations
+            [{"LIKE_NUM": True},
+             {"LOWER": {"IN": ["bis", "ter", "quater", "b", "t", "a"]}},
+             {"OP": "?"}],
+
+            # Common location words
+            [{"LOWER": {"IN": ["résidence", "appartement", "appt", "apt", "bâtiment", "bat", "étage", "chez"]}},
+             {"OP": "+"}, {"OP": "?"}],
+
+            # Countries
+            [{"ENT_TYPE": "GPE"}],  # Using SpaCy's built-in country/city detection
         ],
-        "description": "Street addresses and postal codes"
+        "description": "Street addresses, postal codes, cities, and building numbers"
     },
     "ACCOUNT": {
         "patterns": [
@@ -117,24 +134,55 @@ def redact_pii(text, selected_matchers=None):
     matches = matcher(doc)
     new_ents = []
     for match_id, start, end in matches:
+        # Create span with more context if it's an address
+        if nlp.vocab.strings[match_id] == "ADDRESS":
+            # Try to extend the span to catch surrounding address components
+            while start > 0 and (doc[start-1].text.lower() in ["in", "at", ",", "de", "du", "des", "le", "la", "les"] or
+                               doc[start-1].like_num):
+                start -= 1
+            # Try to extend forward for additional address components
+            while end < len(doc) and (doc[end].text in [",", ".", "-"] or
+                                    doc[end].like_num or
+                                    doc[end].text.lower() in ["street", "avenue", "road", "rue", "chemin"]):
+                end += 1
+
         span = Span(doc, start, end, label=nlp.vocab.strings[match_id])
         new_ents.append(span)
 
-    # Merge overlapping entities
+    # Merge overlapping entities with smarter handling
     all_ents = list(doc.ents) + new_ents
-    all_ents = sorted(all_ents, key=lambda e: e.start)
+    all_ents = sorted(all_ents, key=lambda e: (e.start, -e.end))  # Sort by start pos and prefer longer spans
+
     merged_ents = []
+    current_span = None
+
     for ent in all_ents:
-        if not merged_ents or ent.start >= merged_ents[-1].end:
-            merged_ents.append(ent)
-        elif ent.end > merged_ents[-1].end:
-            merged_ents[-1] = Span(doc, merged_ents[-1].start, ent.end, label=merged_ents[-1].label_)
+        if not current_span:
+            current_span = ent
+            continue
+
+        # Check for overlap
+        if ent.start <= current_span.end:
+            # Merge spans if they overlap
+            if ent.end > current_span.end:
+                # Prefer ADDRESS label for merged spans containing address components
+                if "ADDRESS" in [ent.label_, current_span.label_]:
+                    label = "ADDRESS"
+                else:
+                    label = current_span.label_
+                current_span = Span(doc, current_span.start, ent.end, label=label)
+        else:
+            merged_ents.append(current_span)
+            current_span = ent
+
+    if current_span:
+        merged_ents.append(current_span)
 
     doc.ents = merged_ents
 
     # Redact entities
     redacted_text = text
-    for ent in reversed(doc.ents):
+    for ent in reversed(merged_ents):
         if ent.label_ in DEFAULT_NER_ENTITIES or ent.label_ in (selected_matchers or AVAILABLE_MATCHERS.keys()):
             redacted_text = redacted_text[:ent.start_char] + "[REDACTED]" + redacted_text[ent.end_char:]
 
