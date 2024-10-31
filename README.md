@@ -45,11 +45,25 @@ The service will start on port 5005 by default.
 
 ### Configuration
 
-To change the port, create a `.env` file in the root directory:
+To change the port, rename the `.env.template` file or create a `.env` file in the root directory:
+
+### SpaCy Model Configuration
+
+You can configure which SpaCy model to use by setting the `SPACY_MODEL` environment variable in your `.env` file. Available options include:
+
+- `en_core_web_sm`: Small model (~12MB) - Faster but less accurate
+- `en_core_web_md`: Medium model (~40MB) - Good balance of speed and accuracy
+- `en_core_web_lg`: Large model (~560MB) - More accurate but slower
+- `en_core_web_trf`: Transformer model (~440MB) - Most accurate but requires more resources
+
+Example `.env` configuration:
 
 ```
 FLASK_PORT=5005
+SPACY_MODEL=en_core_web_md
 ```
+
+The service uses the medium model (`en_core_web_md`) by default if no model is specified.
 
 ## API Endpoints
 
@@ -86,7 +100,7 @@ curl -X POST \
 
 ## Implementation Details
 
-The service uses SpaCy's medium-sized English model (`en_core_web_md`) for entity recognition, along with custom matchers for websites, emails, and brand names. The redaction process preserves the original text structure while replacing identified entities with "[REDACTED]".
+The service uses the specified SpaCy model (defaulting to `en_core_web_md`) for entity recognition, along with custom matchers for websites, emails, and brand names. The redaction process preserves the original text structure while replacing identified entities with "[REDACTED]".
 
 For reference, I used these code blocks:
 

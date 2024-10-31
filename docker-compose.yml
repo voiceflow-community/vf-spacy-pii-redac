@@ -1,11 +1,15 @@
 services:
   redaction-service:
-    build: .
+    build:
+      context: .
+      args:
+        - SPACY_MODEL=${SPACY_MODEL}
     ports:
       - "5005:5005"
     volumes:
       - .:/app
     environment:
       - FLASK_ENV=development
+      - SPACY_MODEL=${SPACY_MODEL}
     env_file:
       - .env

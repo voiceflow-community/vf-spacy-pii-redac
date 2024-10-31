@@ -11,7 +11,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # Load the spaCy model
-nlp = spacy.load("en_core_web_md")
+nlp = spacy.load(os.getenv('SPACY_MODEL', 'en_core_web_md'))
 # Create a custom matchers
 matcher = Matcher(nlp.vocab)
 website_pattern = [{"LIKE_URL": True}]
