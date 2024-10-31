@@ -2,7 +2,7 @@ FROM continuumio/miniconda3
 
 WORKDIR /app
 
-RUN conda install -c conda-forge spacy flask
+RUN conda install -c conda-forge spacy flask python-dotenv
 
 # Download the English model (efficiency model)
 #RUN python -m spacy download en_core_web_sm

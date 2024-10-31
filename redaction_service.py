@@ -2,6 +2,11 @@ from flask import Flask, request, jsonify
 import spacy
 from spacy.matcher import Matcher
 from spacy.tokens import Span
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -57,4 +62,5 @@ def redact():
     return jsonify({'redacted_text': redacted_text})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005)
+    port = int(os.getenv('FLASK_PORT', 5005))
+    app.run(host='0.0.0.0', port=port)
