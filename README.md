@@ -6,14 +6,19 @@ A Flask-based API service that uses SpaCy's Named Entity Recognition (NER) to id
 
 SpaCy is an open-source library for advanced Natural Language Processing in Python. The service uses SpaCy's NER capabilities to identify sensitive information like:
 
-- Names
-- Organizations
-- Locations
-- Dates
+- Names (PERSON)
+- Organizations (ORG)
+- Locations (GPE, LOC)
+- Dates and Times
 - Money values
-- Websites
+- Phone numbers
 - Email addresses
-- Brands
+- Credit card numbers
+- Social Security Numbers
+- IP addresses
+- Account/Order numbers
+- Websites
+- Brand names
 - And more...
 
 Learn more about SpaCy NER at [SpaCy's Named Entities Documentation](https://spacy.io/usage/linguistic-features#named-entities)
@@ -45,7 +50,13 @@ The service will start on port 5005 by default.
 
 ### Configuration
 
-To change the port, rename the `.env.template` file or create a `.env` file in the root directory:
+To change the port, rename the `.env.template` file or create a `.env` file in the root directory with the following options:
+
+```
+FLASK_PORT=5005
+SPACY_MODEL=en_core_web_md
+DEFAULT_MATCHERS=EMAIL,PHONE,SSN,CREDIT_CARD,ACCOUNT_NUMBER,IP_ADDRESS
+```
 
 ### SpaCy Model Configuration
 
@@ -56,26 +67,29 @@ You can configure which SpaCy model to use by setting the `SPACY_MODEL` environm
 - `en_core_web_lg`: Large model (~560MB) - More accurate but slower
 - `en_core_web_trf`: Transformer model (~440MB) - Most accurate but requires more resources
 
-Example `.env` configuration:
-
-```
-FLASK_PORT=5005
-SPACY_MODEL=en_core_web_md
-```
-
 The service uses the medium model (`en_core_web_md`) by default if no model is specified.
 
 ## API Endpoints
 
+## GET /available-matchers
+
+Returns a list of all available matchers and their descriptions.
+
+```bash
+curl http://localhost:5005/available-matchers
+```
+
 ### POST /redact
 
-Redacts PII from the provided text.
+Redacts PII from the provided text. You can specify which matchers to use.
+
 
 #### Request Body
 
 ```json
 {
-  "text": "John Doe works at Acme Corp in New York. His email is john.doe@acme.com."
+"text": "John Doe works at Acme Corp in New York. Contact: (555)123-4567 or john.doe@acme.com",
+"matchers": ["EMAIL", "PHONE"] // Optional: specify which matchers to use
 }
 ```
 
@@ -83,36 +97,60 @@ Redacts PII from the provided text.
 
 ```json
 {
-  "redacted_text": "[REDACTED] works at [REDACTED] in [REDACTED] and can be reached at [REDACTED]"
+  "redacted_text": "[REDACTED] works at Acme Corp in [REDACTED]. Contact: [REDACTED] or [REDACTED]"
 }
 ```
 
 #### cURL Example
 
+Using all matchers:
 
 ```bash
 curl -X POST \
-  http://localhost:5005/redact \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "John Doe works at Acme Corp in New York. His email is john.doe@acme.com."}'
+http://localhost:5005/redact \
+-H 'Content-Type: application/json' \
+-d '{"text": "John Doe works at Acme Corp in New York. Contact: (555)123-4567 or john.doe@acme.com"}'
 ```
 
+Using specific matchers:
 
-## Implementation Details
-
-The service uses the specified SpaCy model (defaulting to `en_core_web_md`) for entity recognition, along with custom matchers for websites, emails, and brand names. The redaction process preserves the original text structure while replacing identified entities with "[REDACTED]".
-
-For reference, I used these code blocks:
-
-```python
-# Load the spaCy model
-nlp = spacy.load("en_core_web_md")
-# Create a custom matchers
-matcher = Matcher(nlp.vocab)
-website_pattern = [{"LIKE_URL": True}]
-matcher.add("WEBSITE", [website_pattern])
-email_pattern = [{"LIKE_EMAIL": True}]
-matcher.add("EMAIL", [email_pattern])
-brand_pattern = [{"POS": "PROPN", "IS_TITLE": True}]
-matcher.add("BRAND", [brand_pattern])
+```bash
+curl -X POST \
+http://localhost:5005/redact \
+-H 'Content-Type: application/json' \
+-d '{
+"text": "John Doe works at Acme Corp in New York. Contact: (555)123-4567 or john.doe@acme.com",
+"matchers": ["EMAIL", "PHONE"]
+}'
 ```
+
+## Available Matchers
+
+The service includes the following custom matchers:
+- `EMAIL`: Email addresses
+- `WEBSITE`: Website URLs
+- `BRAND`: Brand names
+- `PHONE`: Phone numbers in various formats
+- `CREDIT_CARD`: Credit card numbers
+- `SSN`: Social Security Numbers
+- `IP_ADDRESS`: IP addresses
+- `ADDRESS`: Street addresses, postal codes, and building numbers
+- `ACCOUNT`: Account/Order reference numbers
+
+Additionally, the following NER entities are also available:
+
+- `PERSON`: Names of people (always included)
+- `ORG`: Organizations, companies, institutions
+- `GPE`: Countries, cities, states (always included)
+- `MONEY`: Monetary values
+- `LOC`: Non-GPE locations, mountain ranges, water bodies
+- `PRODUCT`: Products, objects, vehicles, foods, etc.
+- `DATE`: Absolute or relative dates (always included)
+- `TIME`: Times smaller than a day (always included)
+- `FAC`: Buildings, airports, highways, bridges
+- `LAW`: Named documents made into laws
+- `EVENT`: Named hurricanes, battles, wars, sports events
+- `NORP`: Nationalities, religious or political groups (always included)
+- `WORK_OF_ART`: Titles of books, songs, etc.
+
+
