@@ -154,3 +154,4 @@ Additionally, the following NER entities are also available:
 - `WORK_OF_ART`: Titles of books, songs, etc.
 
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=voiceflow-community_vf-spacy-pii-redac&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=voiceflow-community_vf-spacy-pii-redac)
